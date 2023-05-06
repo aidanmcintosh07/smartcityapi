@@ -1,0 +1,6 @@
+name = "smart-city-api"
+main = "src/index.js"
+compatibility_date = "2023-05-06"
+account_id = "61e187ff03667b20f7a4c13c6af0e9d1"
+workers_dev = true
+node_compat = true
