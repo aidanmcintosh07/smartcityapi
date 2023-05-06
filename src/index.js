@@ -1,4 +1,4 @@
-const apiKey = "vnvvknvav";
+import { apiKey } from "./config";
 
 addEventListener("fetch", (event) => {
 	event.respondWith(handleRequest(event.request));
@@ -6,24 +6,35 @@ addEventListener("fetch", (event) => {
 
 async function handleRequest(request) {
 	const url = new URL(request.url);
-	const endpoint = url.pathname.split("/")[1];
+	const endpoint = url.pathname;
+	const queryParams = url.searchParams;
 
-	if (endpoint === "cities") {
-		const city = url.searchParams.get("city");
+	if (endpoint === "/api/cities") {
+		const city = queryParams.get("city");
 
 		if (!city) {
-			return new Response("Please provide a city", { status: 400 });
+			return new Response(JSON.stringify({ error: "Please provide a city" }), {
+				status: 400,
+				headers: { "Content-Type": "application/json" },
+			});
 		}
 
-		const prompt = `What is the weather, traffic flow, and air quality in ${city} right now?`;
+		const prompt = `What is the weather, traffic flow, air quality and temperature in ${city} right now?`;
 		const cityData = await fetchCityData(prompt, apiKey);
 
-		const cityText = cityData.city;
+		if (!cityData) {
+			return new Response(
+				JSON.stringify({ error: "Unable to generate city information" }),
+				{ status: 500, headers: { "Content-Type": "application/json" } }
+			);
+		}
 
 		const responseData = {
+			city: city,
 			weather: cityData.weather,
 			traffic: cityData.traffic,
 			airQuality: cityData.airQuality,
+			temperature: cityData.temperature,
 		};
 
 		return new Response(JSON.stringify(responseData), {
@@ -31,7 +42,10 @@ async function handleRequest(request) {
 		});
 	}
 
-	return new Response("Invalid endpoint", { status: 404 });
+	return new Response(JSON.stringify({ error: "Invalid endpoint" }), {
+		status: 404,
+		headers: { "Content-Type": "application/json" },
+	});
 }
 
 async function fetchCityData(prompt, apiKey) {
@@ -43,7 +57,7 @@ async function fetchCityData(prompt, apiKey) {
 		},
 		body: JSON.stringify({
 			prompt: prompt,
-			max_token: 1024,
+			max_tokens: 1024,
 			temperature: 0.5,
 			model: "text-davinci-002",
 			n: 1,
@@ -52,12 +66,24 @@ async function fetchCityData(prompt, apiKey) {
 	});
 
 	const data = await response.json();
+	console.log("data", data);
 
 	if (!data.choices || !data.choices[0] || !data.choices[0].text) {
 		throw new Error("Unable to generate city information");
 	}
 
+	const regex =
+		/The weather is (.+), the traffic flow is (.+), the air quality is (.+), and the temperature is (.+)\./i;
+	const matches = data.choices[0].text.match(regex);
+
+	if (!matches || matches.length !== 5) {
+		throw new Error("Unable to extract city information");
+	}
+
 	return {
-		city: data.choices[0].text.trim(),
+		weather: matches[1].trim(),
+		traffic: matches[2].trim(),
+		airQuality: matches[3].trim(),
+		temperature: matches[4].trim(),
 	};
 }
